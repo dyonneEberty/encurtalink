@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkFácil - Encurtador de Links Pessoal</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuração do Tailwind para suportar Dark Mode via classe -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- QRCode.js via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        /* Estilos customizados suaves */
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+        .toast-enter {
+            animation: slideInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes slideInUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        /* Estilo para a imagem gerada pelo QRCode.js */
+        #qrcode-container img, #qrcode-container canvas {
+            margin: 0 auto;
+            border-radius: 0.75rem;
+            padding: 12px;
+            background: white;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col">
+
+    <!-- TELA DE REDIRECIONAMENTO (Exibida quando acessado com #/codigo) -->
+    <div id="redirect-screen" class="hidden fixed inset-0 z-50 bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div class="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8">
+            <div id="redirect-loading">
+                <div class="w-16 h-16 bg-brand-100 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400 rounded-2xl flex items-center justify-center mx-auto mb-5 animate-pulse">
+                    <i data-lucide="external-link" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2">Redirecionando...</h2>
+                <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">Você está sendo levado para o destino original:</p>
+                <div class="bg-slate-100 dark:bg-slate-800 p-3 rounded-xl text-xs font-mono text-slate-700 dark:text-slate-300 break-all mb-6" id="redirect-target-url">
+                    https://...
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                    <a id="redirect-manual-btn" href="#" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-xl transition shadow-sm">
+                        Ir agora
+                    </a>
+                    <button onclick="cancelRedirect()" class="px-5 py-2.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium rounded-xl transition">
+                        Voltar ao painel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Erro caso o código não exista no localStorage -->
+            <div id="redirect-not-found" class="hidden">
+                <div class="w-16 h-16 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                    <i data-lucide="link-2-off" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2">Link não encontrado</h2>
+                <p class="text-slate-500 dark:text-slate-400 text-sm mb-6">
+                    Este código não existe na memória deste navegador. Lembre-se de que os links são salvos localmente no dispositivo onde foram criados.
+                </p>
+                <button onclick="cancelRedirect()" class="w-full px-5 py-3 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-xl transition">
+                    Voltar para o Encurtador
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CABEÇALHO -->
+    <header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 bg-brand-600 text-white rounded-xl flex items-center justify-center shadow-md shadow-brand-600/20">
+                    <i data-lucide="link" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-lg tracking-tight text-slate-900 dark:text-white">Link<span class="text-brand-600 dark:text-brand-400">Fácil</span></span>
+                    <span class="hidden sm:inline-block ml-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Local & Privado</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <!-- Botões de Backup (Exportar / Importar) -->
+                <button onclick="exportLinks()" title="Exportar backup (JSON)" class="p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition flex items-center gap-1.5 text-sm font-medium">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span class="hidden md:inline">Exportar</span>
+                </button>
+                <label title="Importar backup (JSON)" class="cursor-pointer p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition flex items-center gap-1.5 text-sm font-medium">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span class="hidden md:inline">Importar</span>
+                    <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="importLinks(event)">
+                </label>
+
+                <div class="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                <!-- Alternar Tema Claro/Escuro -->
+                <button id="theme-toggle" onclick="toggleTheme()" title="Alternar tema" class="p-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition">
+                    <i id="theme-icon-sun" data-lucide="sun" class="w-5 h-5 hidden"></i>
+                    <i id="theme-icon-moon" data-lucide="moon" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-grow max-w-5xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-10">
+        
+        <!-- HERO / FORMULÁRIO DE ENCURTAMENTO -->
+        <section class="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 sm:p-8 mb-8">
+            <div class="max-w-2xl mb-6">
+                <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    Encurte e organize seus links favoritos
+                </h1>
+                <p class="text-slate-500 dark:text-slate-400 text-sm sm:text-base">
+                    Crie atalhos personalizados com QR Code instantâneo. Tudo fica salvo com segurança na memória local deste navegador.
+                </p>
+            </div>
+
+            <form id="shorten-form" onsubmit="handleShorten(event)" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <!-- URL Original -->
+                    <div class="md:col-span-7">
+                        <label for="original-url" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                            URL de Destino *
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                                <i data-lucide="globe" class="w-4 h-4"></i>
+                            </div>
+                            <input 
+                                type="text" 
+                                id="original-url" 
+                                required
+                                placeholder="Ex: https://www.exemplo.com.br/artigo-muito-longo"
+                                class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800/70 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition text-slate-900 dark:text-white placeholder-slate-400"
+                            >
+                        </div>
+                    </div>
+
+                    <!-- Apelido Personalizado (Opcional) -->
+                    <div class="md:col-span-5">
+                        <label for="custom-alias" class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                            Apelido Personalizado <span class="font-normal lowercase text-slate-400">(opcional)</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-mono text-xs">
+                                #/
+                            </div>
+                            <input 
+                                type="text" 
+                                id="custom-alias" 
+                                placeholder="meu-projeto"
+                                pattern="[a-zA-Z0-9-_]+"
+                                title="Use apenas letras, números, hífens (-) ou sublinhados (_)"
+                                class="w-full pl-8 pr-4 py-3 bg-slate-50 dark:bg-slate-800/70 border border-slate-300 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition text-slate-900 dark:text-white placeholder-slate-400 font-mono"
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botão Submeter e Aviso de Persistência Local -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                    <div class="flex items-start gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <i data-lucide="hard-drive" class="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0 mt-0.5"></i>
+                        <span>
+                            <strong>Armazenamento Local:</strong> Seus links são salvos apenas neste navegador (<code class="text-[11px] bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">localStorage</code>). Use o botão <em>Exportar</em> para fazer backup.
+                        </span>
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        class="w-full sm:w-auto px-6 py-3 bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-semibold rounded-xl shadow-md shadow-brand-600/20 transition flex items-center justify-center gap-2 shrink-0"
+                    >
+                        <i data-lucide="wand-2" class="w-4 h-4"></i>
+                        <span>Encurtar Link</span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- CARD DE RESULTADO IMEDIATO (Aparece logo após gerar um link) -->
+            <div id="latest-result-box" class="hidden mt-6 pt-6 border-t border-slate-200 dark:border-slate-800">
+                <div class="bg-brand-50/70 dark:bg-brand-500/10 border border-brand-200 dark:border-brand-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div class="min-w-0 flex-1">
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 dark:text-brand-400 mb-1">
+                            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+                            Link encurtado pronto para uso!
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <a id="latest-short-link" href="#" onclick="handleTestClick(event, this.dataset.code)" class="font-mono text-base sm:text-lg font-bold text-slate-900 dark:text-white hover:underline truncate">
+                                ...
+                            </a>
+                        </div>
+                        <p id="latest-original-url" class="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                            ...
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <button id="latest-copy-btn" onclick="copyLatestLink()" class="flex-1 sm:flex-initial px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition flex items-center justify-center gap-2 shadow-sm">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                            <span>Copiar</span>
+                        </button>
+                        <button id="latest-qr-btn" onclick="openQrModalFromLatest()" class="p-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition" title="Ver QR Code">
+                            <i data-lucide="qr-code" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO DE HISTÓRICO DE LINKS -->
+        <section>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                <div class="flex items-center gap-2.5">
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white">Meus Links Salvos</h2>
+                    <span id="links-count-badge" class="px-2.5 py-0.5 text-xs font-semibold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-full">
+                        0
+                    </span>
+                </div>
+
+                <!-- Barra de Busca -->
+                <div class="relative w-full sm:w-72">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                    </div>
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        oninput="renderLinks()"
+                        placeholder="Buscar por apelido ou URL..." 
+                        class="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition text-slate-900 dark:text-white placeholder-slate-400"
+                    >
+                </div>
+            </div>
+
+            <!-- Lista de Cards -->
+            <div id="links-list" class="space-y-3">
+                <!-- Preenchido via JavaScript -->
+            </div>
+
+            <!-- Estado Vazio -->
+            <div id="empty-state" class="hidden bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 p-12 text-center">
+                <div class="w-14 h-14 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="inbox" class="w-7 h-7"></i>
+                </div>
+                <h3 class="text-base font-semibold text-slate-900 dark:text-white mb-1">Nenhum link encontrado</h3>
+                <p id="empty-state-msg" class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                    Cole uma URL no formulário acima para criar seu primeiro link encurtado.
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <!-- RODAPÉ -->
+    <footer class="border-t border-slate-200 dark:border-slate-800 py-6 mt-12">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <p>LinkFácil &mdash; Ferramenta pessoal de encurtamento e gestão de links.</p>
+            <p>Acesse links curtos usando <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">#/apelido</code> nesta página.</p>
+        </div>
+    </footer>
+
+    <!-- MODAL DE QR CODE -->
+    <div id="qr-modal" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="closeQrModal(event)">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-lg text-slate-900 dark:text-white">QR Code do Link</h3>
+                <button onclick="closeQrModal()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="bg-slate-100 dark:bg-slate-800/80 p-6 rounded-2xl mb-4 flex items-center justify-center">
+                <div id="qrcode-container"></div>
+            </div>
+
+            <p id="qr-modal-alias" class="font-mono text-sm font-semibold text-brand-600 dark:text-brand-400 mb-1"></p>
+            <p id="qr-modal-url" class="text-xs text-slate-500 dark:text-slate-400 truncate mb-6"></p>
+
+            <div class="flex gap-3">
+                <button onclick="downloadQrCode()" class="flex-1 py-2.5 px-4 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition flex items-center justify-center gap-2 shadow-sm">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span>Baixar PNG</span>
+                </button>
+                <button onclick="closeQrModal()" class="py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium rounded-xl transition">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (Substitui confirm()) -->
+    <div id="delete-modal" class="hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4" onclick="closeDeleteModal(event)">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl" onclick="event.stopPropagation()">
+            <div class="w-12 h-12 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-xl flex items-center justify-center mb-4">
+                <i data-lucide="trash-2" class="w-6 h-6"></i>
+            </div>
+            <h3 class="font-bold text-lg text-slate-900 dark:text-white mb-1">Excluir este link?</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                O atalho <span id="delete-modal-code" class="font-mono font-semibold text-slate-800 dark:text-slate-200"></span> será removido permanentemente do histórico deste navegador.
+            </p>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closeDeleteModal()" class="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-sm font-medium rounded-xl transition">
+                    Cancelar
+                </button>
+                <button id="confirm-delete-btn" class="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition shadow-sm">
+                    Sim, excluir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTAINER DE NOTIFICAÇÕES TOAST -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-xs w-full pointer-events-none"></div>
+
+    <script>
+        // ==========================================
+        // ESTADO E CONFIGURAÇÃO INICIAL
+        // ==========================================
+        const STORAGE_KEY = 'linkfacil_links_v1';
+        const THEME_KEY = 'linkfacil_theme';
+        let links = [];
+        let latestCreatedCode = null;
+        let currentQrCodeData = { code: '', url: '' };
+        let redirectTimer = null;
+
+        // Inicialização ao carregar a página
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            loadLinks();
+            checkHashRedirect();
+            renderLinks();
+            lucide.createIcons();
+        });
+
+        // Ouve mudanças na hash da URL (ex: usuário clicou em #/codigo ou alterou na barra)
+        window.addEventListener('hashchange', () => {
+            checkHashRedirect();
+        });
+
+        // ==========================================
+        // GERENCIAMENTO DE TEMA (CLARO / ESCURO)
+        // ==========================================
+        function initTheme() {
+            const savedTheme = localStorage.getItem(THEME_KEY);
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+                document.documentElement.classList.add('dark');
+                updateThemeIcons(true);
+            } else {
+                document.documentElement.classList.remove('dark');
+                updateThemeIcons(false);
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+            updateThemeIcons(isDark);
+        }
+
+        function updateThemeIcons(isDark) {
+            const sun = document.getElementById('theme-icon-sun');
+            const moon = document.getElementById('theme-icon-moon');
+            if (isDark) {
+                sun.classList.remove('hidden');
+                moon.classList.add('hidden');
+            } else {
+                sun.classList.add('hidden');
+                moon.classList.remove('hidden');
+            }
+        }
+
+        // ==========================================
+        // PERSISTÊNCIA DE DADOS (LOCALSTORAGE)
+        // ==========================================
+        function loadLinks() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                links = raw ? JSON.parse(raw) : [];
+                if (!Array.isArray(links)) links = [];
+            } catch (e) {
+                console.error('Erro ao ler localStorage:', e);
+                links = [];
+            }
+        }
+
+        function saveLinks() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(links));
+            } catch (e) {
+                showToast('Erro ao salvar no navegador. Espaço cheio?', 'error');
+            }
+        }
+
+        // ==========================================
+        // LÓGICA DE REDIRECIONAMENTO VIA HASH (#/codigo)
+        // ==========================================
+        function checkHashRedirect() {
+            const hash = window.location.hash;
+            // Verifica se o formato é #/algum-codigo
+            if (hash && hash.startsWith('#/') && hash.length > 2) {
+                const code = decodeURIComponent(hash.substring(2)).trim();
+                const found = links.find(item => item.code.toLowerCase() === code.toLowerCase());
+                
+                const screen = document.getElementById('redirect-screen');
+                const loadingBox = document.getElementById('redirect-loading');
+                const notFoundBox = document.getElementById('redirect-not-found');
+                
+                screen.classList.remove('hidden');
+
+                if (found) {
+                    // Incrementa contador de cliques
+                    found.clicks = (found.clicks || 0) + 1;
+                    saveLinks();
+                    renderLinks();
+
+                    loadingBox.classList.remove('hidden');
+                    notFoundBox.classList.add('hidden');
+
+                    document.getElementById('redirect-target-url').textContent = found.originalUrl;
+                    const manualBtn = document.getElementById('redirect-manual-btn');
+                    manualBtn.href = found.originalUrl;
+
+                    // Redireciona automaticamente após 1.2 segundos
+                    clearTimeout(redirectTimer);
+                    redirectTimer = setTimeout(() => {
+                        window.location.href = found.originalUrl;
+                    }, 1200);
+                } else {
+                    loadingBox.classList.add('hidden');
+                    notFoundBox.classList.remove('hidden');
+                }
+                lucide.createIcons();
+            }
+        }
+
+        function cancelRedirect() {
+            clearTimeout(redirectTimer);
+            // Limpa a hash sem recarregar a página
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+            document.getElementById('redirect-screen').classList.add('hidden');
+        }
+
+        // ==========================================
+        // VALIDAÇÃO E CRIAÇÃO DE LINK CURTO
+        // ==========================================
+        function normalizeAndValidateUrl(input) {
+            let urlStr = input.trim();
+            if (!urlStr) return null;
+
+            // Adiciona https:// automaticamente se não tiver protocolo
+            if (!/^https?:\/\//i.test(urlStr)) {
+                urlStr = 'https://' + urlStr;
+            }
+
+            try {
+                const parsed = new URL(urlStr);
+                // Garante que há um domínio válido com pelo menos um ponto (ex: site.com)
+                if (!parsed.hostname || !parsed.hostname.includes('.')) {
+                    return null;
+                }
+                return parsed.href;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        function generateRandomCode(length = 5) {
+            const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        function getBaseUrl() {
+            // Retorna a URL atual limpa (sem hash) para montar o link curto funcional
+            return window.location.href.split('#')[0];
+        }
+
+        function buildShortUrl(code) {
+            return `${getBaseUrl()}#/${code}`;
+        }
+
+        function handleShorten(event) {
+            event.preventDefault();
+
+            const urlInput = document.getElementById('original-url');
+            const aliasInput = document.getElementById('custom-alias');
+
+            const validUrl = normalizeAndValidateUrl(urlInput.value);
+            if (!validUrl) {
+                showToast('Por favor, insira uma URL válida (ex: google.com).', 'error');
+                urlInput.focus();
+                return;
+            }
+
+            let code = aliasInput.value.trim();
+
+            if (code) {
+                // Valida caracteres do apelido personalizado
+                if (!/^[a-zA-Z0-9-_]+$/.test(code)) {
+                    showToast('O apelido deve conter apenas letras, números, - ou _.', 'error');
+                    aliasInput.focus();
+                    return;
+                }
+                // Verifica duplicata (case-insensitive)
+                const exists = links.some(item => item.code.toLowerCase() === code.toLowerCase());
+                if (exists) {
+                    showToast(`O apelido "${code}" já está em uso. Escolha outro.`, 'error');
+                    aliasInput.focus();
+                    return;
+                }
+            } else {
+                // Gera código aleatório único
+                do {
+                    code = generateRandomCode(5);
+                } while (links.some(item => item.code.toLowerCase() === code.toLowerCase()));
+            }
+
+            const newLink = {
+                id: Date.now().toString(),
+                code: code,
+                originalUrl: validUrl,
+                createdAt: new Date().toISOString(),
+                clicks: 0
+            };
+
+            links.unshift(newLink);
+            saveLinks();
+            renderLinks();
+
+            // Exibe caixa de resultado imediato
+            latestCreatedCode = code;
+            const shortUrl = buildShortUrl(code);
+            const resultBox = document.getElementById('latest-result-box');
+            const latestLinkEl = document.getElementById('latest-short-link');
+            const latestOrigEl = document.getElementById('latest-original-url');
+
+            latestLinkEl.textContent = `#/${code}`;
+            latestLinkEl.href = shortUrl;
+            latestLinkEl.dataset.code = code;
+            latestOrigEl.textContent = validUrl;
+
+            resultBox.classList.remove('hidden');
+
+            // Limpa formulário
+            urlInput.value = '';
+            aliasInput.value = '';
+
+            showToast('Link encurtado com sucesso!', 'success');
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // AÇÕES DOS LINKS (COPIAR, TESTAR, EXCLUIR, QR)
+        // ==========================================
+        function copyToClipboard(text, buttonElement = null) {
+            // Usa textarea temporário + execCommand('copy') para máxima compatibilidade em iframes
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+
+            try {
+                document.execCommand('copy');
+                showToast('Link copiado para a área de transferência!', 'success');
+
+                if (buttonElement) {
+                    const originalHtml = buttonElement.innerHTML;
+                    buttonElement.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span>Copiado!</span>`;
+                    buttonElement.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'border-emerald-600');
+                    lucide.createIcons();
+
+                    setTimeout(() => {
+                        buttonElement.innerHTML = originalHtml;
+                        buttonElement.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'border-emerald-600');
+                        lucide.createIcons();
+                    }, 2000);
+                }
+            } catch (err) {
+                showToast('Não foi possível copiar o link.', 'error');
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function copyLatestLink() {
+            if (!latestCreatedCode) return;
+            const btn = document.getElementById('latest-copy-btn');
+            copyToClipboard(buildShortUrl(latestCreatedCode), btn);
+        }
+
+        function handleTestClick(event, code) {
+            if (event) event.preventDefault();
+            const item = links.find(l => l.code === code);
+            if (!item) return;
+
+            item.clicks = (item.clicks || 0) + 1;
+            saveLinks();
+            renderLinks();
+
+            // Abre a URL original em nova aba
+            window.open(item.originalUrl, '_blank', 'noopener,noreferrer');
+        }
+
+        // Modal de Exclusão
+        function requestDeleteLink(code) {
+            const modal = document.getElementById('delete-modal');
+            document.getElementById('delete-modal-code').textContent = `#/${code}`;
+            
+            const confirmBtn = document.getElementById('confirm-delete-btn');
+            confirmBtn.onclick = () => {
+                links = links.filter(item => item.code !== code);
+                saveLinks();
+                renderLinks();
+                if (latestCreatedCode === code) {
+                    document.getElementById('latest-result-box').classList.add('hidden');
+                    latestCreatedCode = null;
+                }
+                closeDeleteModal();
+                showToast('Link excluído do histórico.', 'info');
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeDeleteModal(event) {
+            if (!event || event.target === document.getElementById('delete-modal')) {
+                document.getElementById('delete-modal').classList.add('hidden');
+            }
+        }
+
+        // ==========================================
+        // GERAÇÃO E DOWNLOAD DE QR CODE
+        // ==========================================
+        function openQrModal(code) {
+            const item = links.find(l => l.code === code);
+            if (!item) return;
+
+            // O QR Code aponta diretamente para a URL original para funcionar ao ser escaneado por qualquer celular
+            const targetUrl = item.originalUrl;
+            currentQrCodeData = { code: item.code, url: targetUrl };
+
+            const container = document.getElementById('qrcode-container');
+            container.innerHTML = ''; // Limpa QR anterior
+
+            new QRCode(container, {
+                text: targetUrl,
+                width: 190,
+                height: 190,
+                colorDark: '#0f172a',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            document.getElementById('qr-modal-alias').textContent = `#/${item.code}`;
+            document.getElementById('qr-modal-url').textContent = targetUrl;
+            document.getElementById('qr-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function openQrModalFromLatest() {
+            if (latestCreatedCode) {
+                openQrModal(latestCreatedCode);
+            }
+        }
+
+        function closeQrModal(event) {
+            if (!event || event.target === document.getElementById('qr-modal')) {
+                document.getElementById('qr-modal').classList.add('hidden');
+            }
+        }
+
+        function downloadQrCode() {
+            const container = document.getElementById('qrcode-container');
+            const img = container.querySelector('img');
+            const canvas = container.querySelector('canvas');
+
+            let dataUrl = '';
+            if (img && img.src) {
+                dataUrl = img.src;
+            } else if (canvas) {
+                dataUrl = canvas.toDataURL('image/png');
+            }
+
+            if (!dataUrl) {
+                showToast('Erro ao gerar imagem do QR Code.', 'error');
+                return;
+            }
+
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `qrcode-${currentQrCodeData.code}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('QR Code baixado!', 'success');
+        }
+
+        // ==========================================
+        // RENDERIZAÇÃO DA LISTA E FILTRO DE BUSCA
+        // ==========================================
+        function formatDate(isoString) {
+            try {
+                const date = new Date(isoString);
+                return date.toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch {
+                return '';
+            }
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function renderLinks() {
+            const listContainer = document.getElementById('links-list');
+            const emptyState = document.getElementById('empty-state');
+            const emptyMsg = document.getElementById('empty-state-msg');
+            const countBadge = document.getElementById('links-count-badge');
+            const searchQuery = document.getElementById('search-input').value.trim().toLowerCase();
+
+            countBadge.textContent = links.length;
+
+            const filtered = links.filter(item => 
+                item.code.toLowerCase().includes(searchQuery) || 
+                item.originalUrl.toLowerCase().includes(searchQuery)
+            );
+
+            if (filtered.length === 0) {
+                listContainer.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                emptyMsg.textContent = searchQuery 
+                    ? `Nenhum link corresponde à busca "${searchQuery}".`
+                    : 'Cole uma URL no formulário acima para criar seu primeiro link encurtado.';
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            listContainer.innerHTML = filtered.map(item => {
+                const fullShortUrl = buildShortUrl(item.code);
+                const safeCode = escapeHtml(item.code);
+                const safeOriginal = escapeHtml(item.originalUrl);
+                const safeShortUrl = escapeHtml(fullShortUrl);
+
+                return `
+                <article class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    
+                    <!-- Informações do Link -->
+                    <div class="min-w-0 flex-1 space-y-1.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <a href="${safeShortUrl}" onclick="handleTestClick(event, '${safeCode}')" class="font-mono font-bold text-base text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1" title="Testar redirecionamento">
+                                <span>#/${safeCode}</span>
+                                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                            </a>
+
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" title="Total de cliques/testes">
+                                <i data-lucide="mouse-pointer-click" class="w-3 h-3 text-brand-500"></i>
+                                ${item.clicks || 0} ${item.clicks === 1 ? 'clique' : 'cliques'}
+                            </span>
+
+                            <span class="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                                <i data-lucide="calendar" class="w-3 h-3"></i>
+                                ${formatDate(item.createdAt)}
+                            </span>
+                        </div>
+
+                        <!-- URL Original truncada com tooltip -->
+                        <div class="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
+                            <i data-lucide="corner-down-right" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                            <a href="${safeOriginal}" target="_blank" rel="noopener noreferrer" title="${safeOriginal}" class="truncate hover:text-slate-900 dark:hover:text-slate-200 transition">
+                                ${safeOriginal}
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800 shrink-0">
+                        <button onclick="copyToClipboard('${safeShortUrl}', this)" class="flex-1 sm:flex-initial px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span>Copiar</span>
+                        </button>
+
+                        <button onclick="handleTestClick(event, '${safeCode}')" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition flex items-center gap-1.5" title="Abrir URL original e contar clique">
+                            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                            <span class="hidden sm:inline">Testar</span>
+                        </button>
+
+                        <button onclick="openQrModal('${safeCode}')" class="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition" title="Gerar QR Code">
+                            <i data-lucide="qr-code" class="w-4 h-4"></i>
+                        </button>
+
+                        <button onclick="requestDeleteLink('${safeCode}')" class="p-2 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded-xl transition" title="Excluir link">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </article>
+                `;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // BACKUP: EXPORTAR E IMPORTAR JSON
+        // ==========================================
+        function exportLinks() {
+            if (links.length === 0) {
+                showToast('Não há links salvos para exportar.', 'info');
+                return;
+            }
+
+            const dataStr = JSON.stringify(links, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const dateTag = new Date().toISOString().slice(0, 10);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup-linkfacil-${dateTag}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('Backup JSON exportado com sucesso!', 'success');
+        }
+
+        function importLinks(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!Array.isArray(imported)) {
+                        throw new Error('Formato inválido');
+                    }
+
+                    let addedCount = 0;
+                    imported.forEach(item => {
+                        if (item && typeof item.code === 'string' && typeof item.originalUrl === 'string') {
+                            const exists = links.some(existing => existing.code.toLowerCase() === item.code.toLowerCase());
+                            if (!exists) {
+                                links.push({
+                                    id: item.id || Date.now().toString() + Math.random(),
+                                    code: item.code,
+                                    originalUrl: item.originalUrl,
+                                    createdAt: item.createdAt || new Date().toISOString(),
+                                    clicks: Number(item.clicks) || 0
+                                });
+                                addedCount++;
+                            }
+                        }
+                    });
+
+                    saveLinks();
+                    renderLinks();
+                    showToast(`${addedCount} novo(s) link(s) importado(s)!`, 'success');
+                } catch (err) {
+                    showToast('Arquivo JSON inválido ou corrompido.', 'error');
+                } finally {
+                    event.target.value = ''; // Reseta input para permitir reimportar o mesmo arquivo
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ==========================================
+        // NOTIFICAÇÕES TOAST
+        // ==========================================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            let iconName = 'info';
+            let borderClass = 'border-slate-200 dark:border-slate-700';
+            let iconColor = 'text-brand-500';
+
+            if (type === 'success') {
+                iconName = 'check-circle-2';
+                borderClass = 'border-emerald-200 dark:border-emerald-500/30';
+                iconColor = 'text-emerald-500';
+            } else if (type === 'error') {
+                iconName = 'alert-circle';
+                borderClass = 'border-red-200 dark:border-red-500/30';
+                iconColor = 'text-red-500';
+            }
+
+            toast.className = `toast-enter pointer-events-auto bg-white dark:bg-slate-900 border ${borderClass} shadow-lg rounded-xl p-3.5 flex items-center gap-3 text-sm text-slate-800 dark:text-slate-100`;
+            toast.innerHTML = `
+                <i data-lucide="${iconName}" class="w-5 h-5 ${iconColor} shrink-0"></i>
+                <span class="font-medium leading-snug">${escapeHtml(message)}</span>
+            `;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(10px)';
+                toast.style.transition = 'all 0.25s ease';
+                setTimeout(() => toast.remove(), 250);
+            }, 3200);
+        }
+    </script>
+</body>
+</html>
